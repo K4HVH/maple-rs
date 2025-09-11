@@ -2,5 +2,38 @@
 name = "maple-rs"
 version = "0.1.0"
 edition = "2024"
+description = "A Rust library for loading executables and DLLs directly from memory"
+license = "MIT"
+repository = "https://github.com/K4HVH/maple-rs"
 
 [dependencies]
+thiserror = "1.0"
+memoffset = "0.9"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = [
+    "winnt",
+    "minwinbase",
+    "memoryapi",
+    "processthreadsapi",
+    "libloaderapi",
+    "errhandlingapi",
+    "psapi",
+    "winerror",
+    "impl-default"
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[lib]
+name = "maple"
+crate-type = ["lib"]
+
+[[example]]
+name = "load_demo"
+path = "examples/load_demo.rs"
+
+[[example]]
+name = "load_focus"
+path = "examples/load_focus.rs"
