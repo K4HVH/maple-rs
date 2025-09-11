@@ -27,6 +27,7 @@ pub struct WindowsMemoryModule {
     is_dll: bool,
     is_loaded: bool,
     loaded_modules: HashMap<String, HMODULE>,
+    pe_data: Vec<u8>,
 }
 
 impl WindowsMemoryModule {
@@ -63,6 +64,7 @@ impl WindowsMemoryModule {
             is_dll: pe.is_dll(),
             is_loaded: false,
             loaded_modules: HashMap::new(),
+            pe_data: data.to_vec(),
         };
 
         module.copy_sections(data, &pe)?;
@@ -76,6 +78,9 @@ impl WindowsMemoryModule {
         }
 
         module.finalize_sections(&pe)?;
+        
+        // Process TLS callbacks
+        module.process_tls_callbacks(&pe)?;
 
         let entry_point_rva = pe.entry_point();
         if entry_point_rva != 0 {
@@ -357,6 +362,46 @@ impl WindowsMemoryModule {
         Ok(())
     }
 
+    fn process_tls_callbacks(&mut self, pe: &PEParser) -> Result<()> {
+        let tls_dir = match pe.get_tls_directory() {
+            Some(dir) if dir.size > 0 => dir,
+            _ => return Ok(()),
+        };
+
+        let tls_data = pe.get_data_at_rva(tls_dir.virtual_address, mem::size_of::<ImageTlsDirectory64>())
+            .ok_or_else(|| MapleError::ExecutionFailed("Failed to read TLS directory".to_string()))?;
+
+        let tls_directory = unsafe { &*(tls_data.as_ptr() as *const ImageTlsDirectory64) };
+        
+        if tls_directory.address_of_callbacks == 0 {
+            return Ok(());
+        }
+
+        // Convert callback address from image base to our loaded base
+        let delta = self.base_address as i64 - pe.image_base() as i64;
+        let callbacks_va = (tls_directory.address_of_callbacks as i64 + delta) as *const u64;
+
+        unsafe {
+            let mut callback_ptr = callbacks_va;
+            loop {
+                let callback_addr = ptr::read(callback_ptr);
+                if callback_addr == 0 {
+                    break;
+                }
+
+                let callback: unsafe extern "system" fn(LPVOID, DWORD, LPVOID) = 
+                    mem::transmute(callback_addr);
+                
+                // Call TLS callback with DLL_PROCESS_ATTACH
+                callback(self.base_address as LPVOID, DLL_PROCESS_ATTACH, ptr::null_mut());
+
+                callback_ptr = callback_ptr.add(1);
+            }
+        }
+
+        Ok(())
+    }
+
     fn load_library(&mut self, name: &str) -> Result<HMODULE> {
         if let Some(&handle) = self.loaded_modules.get(name) {
             return Ok(handle);
@@ -447,6 +492,56 @@ impl MemoryModule for WindowsMemoryModule {
             return Err(MapleError::ExecutionFailed("Module not loaded".to_string()));
         }
 
+        let pe = PEParser::new(&self.pe_data)?;
+        let export_dir = match pe.get_export_directory() {
+            Some(dir) if dir.size > 0 => dir,
+            _ => return Err(MapleError::SymbolNotFound("No export directory".to_string())),
+        };
+
+        let export_data = pe.get_data_at_rva(export_dir.virtual_address, mem::size_of::<ImageExportDirectory>())
+            .ok_or_else(|| MapleError::SymbolNotFound("Invalid export directory".to_string()))?;
+
+        let export_desc = unsafe { &*(export_data.as_ptr() as *const ImageExportDirectory) };
+
+        if export_desc.number_of_names == 0 {
+            return Err(MapleError::SymbolNotFound("No named exports".to_string()));
+        }
+
+        let names_rva = export_desc.address_of_names;
+        let ordinals_rva = export_desc.address_of_name_ordinals;
+        let functions_rva = export_desc.address_of_functions;
+
+        for i in 0..export_desc.number_of_names {
+            let name_ptr_rva_data = pe.get_data_at_rva(names_rva + i * 4, 4)
+                .ok_or_else(|| MapleError::SymbolNotFound("Invalid name pointer".to_string()))?;
+            let name_ptr_rva = u32::from_le_bytes([
+                name_ptr_rva_data[0], name_ptr_rva_data[1], 
+                name_ptr_rva_data[2], name_ptr_rva_data[3]
+            ]);
+
+            let export_name = self.read_string_at_rva(&self.pe_data, &pe, name_ptr_rva)?;
+            
+            if export_name == name {
+                let ordinal_data = pe.get_data_at_rva(ordinals_rva + i * 2, 2)
+                    .ok_or_else(|| MapleError::SymbolNotFound("Invalid ordinal".to_string()))?;
+                let ordinal = u16::from_le_bytes([ordinal_data[0], ordinal_data[1]]);
+
+                let function_rva_data = pe.get_data_at_rva(functions_rva + ordinal as u32 * 4, 4)
+                    .ok_or_else(|| MapleError::SymbolNotFound("Invalid function RVA".to_string()))?;
+                let function_rva = u32::from_le_bytes([
+                    function_rva_data[0], function_rva_data[1],
+                    function_rva_data[2], function_rva_data[3]
+                ]);
+
+                if function_rva == 0 {
+                    return Err(MapleError::SymbolNotFound("Function not implemented".to_string()));
+                }
+
+                let function_va = unsafe { self.base_address.add(function_rva as usize) };
+                return Ok(function_va);
+            }
+        }
+
         Err(MapleError::SymbolNotFound(format!("Function {} not found", name)))
     }
 
@@ -455,7 +550,37 @@ impl MemoryModule for WindowsMemoryModule {
             return Err(MapleError::ExecutionFailed("Module not loaded".to_string()));
         }
 
-        Err(MapleError::SymbolNotFound(format!("Ordinal {} not found", ordinal)))
+        let pe = PEParser::new(&self.pe_data)?;
+        let export_dir = match pe.get_export_directory() {
+            Some(dir) if dir.size > 0 => dir,
+            _ => return Err(MapleError::SymbolNotFound("No export directory".to_string())),
+        };
+
+        let export_data = pe.get_data_at_rva(export_dir.virtual_address, mem::size_of::<ImageExportDirectory>())
+            .ok_or_else(|| MapleError::SymbolNotFound("Invalid export directory".to_string()))?;
+
+        let export_desc = unsafe { &*(export_data.as_ptr() as *const ImageExportDirectory) };
+
+        if ordinal < export_desc.base as u16 || ordinal >= (export_desc.base + export_desc.number_of_functions) as u16 {
+            return Err(MapleError::SymbolNotFound("Invalid ordinal".to_string()));
+        }
+
+        let function_index = (ordinal - export_desc.base as u16) as u32;
+        let functions_rva = export_desc.address_of_functions;
+
+        let function_rva_data = pe.get_data_at_rva(functions_rva + function_index * 4, 4)
+            .ok_or_else(|| MapleError::SymbolNotFound("Invalid function RVA".to_string()))?;
+        let function_rva = u32::from_le_bytes([
+            function_rva_data[0], function_rva_data[1],
+            function_rva_data[2], function_rva_data[3]
+        ]);
+
+        if function_rva == 0 {
+            return Err(MapleError::SymbolNotFound("Function not implemented".to_string()));
+        }
+
+        let function_va = unsafe { self.base_address.add(function_rva as usize) };
+        Ok(function_va)
     }
 
     fn execute_entry_point(&self) -> Result<()> {
@@ -527,6 +652,58 @@ impl MemoryModule for WindowsMemoryModule {
 
     fn size(&self) -> usize {
         self.size
+    }
+
+    // Resource management functions
+    fn find_resource(&self, name: Option<&str>, resource_type: Option<&str>) -> Result<*const u8> {
+        self.find_resource_ex(name, resource_type, 0)
+    }
+
+    fn find_resource_ex(&self, _name: Option<&str>, _resource_type: Option<&str>, _language: u16) -> Result<*const u8> {
+        if !self.is_loaded {
+            return Err(MapleError::ExecutionFailed("Module not loaded".to_string()));
+        }
+
+        let pe = PEParser::new(&self.pe_data)?;
+        let _resource_dir = match pe.get_resource_directory() {
+            Some(dir) if dir.size > 0 => dir,
+            _ => return Err(MapleError::SymbolNotFound("No resource directory".to_string())),
+        };
+
+        // For now, return a placeholder implementation
+        // Full resource directory parsing would be quite complex
+        Err(MapleError::SymbolNotFound("Resource not found".to_string()))
+    }
+
+    fn sizeof_resource(&self, _resource: *const u8) -> Result<usize> {
+        if !self.is_loaded {
+            return Err(MapleError::ExecutionFailed("Module not loaded".to_string()));
+        }
+        
+        // Placeholder implementation
+        Err(MapleError::SymbolNotFound("Resource size not available".to_string()))
+    }
+
+    fn load_resource(&self, _resource: *const u8) -> Result<*const u8> {
+        if !self.is_loaded {
+            return Err(MapleError::ExecutionFailed("Module not loaded".to_string()));
+        }
+        
+        // Placeholder implementation
+        Err(MapleError::SymbolNotFound("Resource data not available".to_string()))
+    }
+
+    fn load_string(&self, id: u32, buffer: &mut [u16]) -> Result<usize> {
+        self.load_string_ex(id, buffer, 0)
+    }
+
+    fn load_string_ex(&self, _id: u32, _buffer: &mut [u16], _language: u16) -> Result<usize> {
+        if !self.is_loaded {
+            return Err(MapleError::ExecutionFailed("Module not loaded".to_string()));
+        }
+        
+        // Placeholder implementation
+        Err(MapleError::SymbolNotFound("String resource not found".to_string()))
     }
 }
 

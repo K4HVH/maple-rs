@@ -36,6 +36,40 @@ pub struct ImageFileHeader {
 }
 
 #[repr(C)]
+pub struct ImageOptionalHeader32 {
+    pub magic: u16,
+    pub major_linker_version: u8,
+    pub minor_linker_version: u8,
+    pub size_of_code: u32,
+    pub size_of_initialized_data: u32,
+    pub size_of_uninitialized_data: u32,
+    pub address_of_entry_point: u32,
+    pub base_of_code: u32,
+    pub base_of_data: u32,
+    pub image_base: u32,
+    pub section_alignment: u32,
+    pub file_alignment: u32,
+    pub major_operating_system_version: u16,
+    pub minor_operating_system_version: u16,
+    pub major_image_version: u16,
+    pub minor_image_version: u16,
+    pub major_subsystem_version: u16,
+    pub minor_subsystem_version: u16,
+    pub win32_version_value: u32,
+    pub size_of_image: u32,
+    pub size_of_headers: u32,
+    pub checksum: u32,
+    pub subsystem: u16,
+    pub dll_characteristics: u16,
+    pub size_of_stack_reserve: u32,
+    pub size_of_stack_commit: u32,
+    pub size_of_heap_reserve: u32,
+    pub size_of_heap_commit: u32,
+    pub loader_flags: u32,
+    pub number_of_rva_and_sizes: u32,
+}
+
+#[repr(C)]
 pub struct ImageOptionalHeader64 {
     pub magic: u16,
     pub major_linker_version: u8,
@@ -124,13 +158,60 @@ pub struct ImageExportDirectory {
     pub address_of_name_ordinals: u32,
 }
 
+#[repr(C)]
+pub struct ImageTlsDirectory32 {
+    pub start_address_of_raw_data: u32,
+    pub end_address_of_raw_data: u32,
+    pub address_of_index: u32,
+    pub address_of_callbacks: u32,
+    pub size_of_zero_fill: u32,
+    pub characteristics: u32,
+}
+
+#[repr(C)]
+pub struct ImageTlsDirectory64 {
+    pub start_address_of_raw_data: u64,
+    pub end_address_of_raw_data: u64,
+    pub address_of_index: u64,
+    pub address_of_callbacks: u64,
+    pub size_of_zero_fill: u32,
+    pub characteristics: u32,
+}
+
+#[repr(C)]
+pub struct ImageResourceDirectory {
+    pub characteristics: u32,
+    pub time_date_stamp: u32,
+    pub major_version: u16,
+    pub minor_version: u16,
+    pub number_of_name_entries: u16,
+    pub number_of_id_entries: u16,
+}
+
+#[repr(C)]
+pub struct ImageResourceDirectoryEntry {
+    pub name_or_id: u32,
+    pub offset_to_data_or_directory: u32,
+}
+
+#[repr(C)]
+pub struct ImageResourceDataEntry {
+    pub offset_to_data: u32,
+    pub size: u32,
+    pub code_page: u32,
+    pub reserved: u32,
+}
+
 pub const IMAGE_DOS_SIGNATURE: u16 = 0x5A4D;
 pub const IMAGE_NT_SIGNATURE: u32 = 0x00004550;
+pub const IMAGE_NT_OPTIONAL_HDR32_MAGIC: u16 = 0x010b;
 pub const IMAGE_NT_OPTIONAL_HDR64_MAGIC: u16 = 0x020b;
 
 pub const IMAGE_DIRECTORY_ENTRY_EXPORT: usize = 0;
 pub const IMAGE_DIRECTORY_ENTRY_IMPORT: usize = 1;
+pub const IMAGE_DIRECTORY_ENTRY_RESOURCE: usize = 2;
 pub const IMAGE_DIRECTORY_ENTRY_BASERELOC: usize = 5;
+pub const IMAGE_DIRECTORY_ENTRY_TLS: usize = 9;
 
 pub const IMAGE_REL_BASED_ABSOLUTE: u16 = 0;
 pub const IMAGE_REL_BASED_HIGH: u16 = 1;
@@ -139,7 +220,19 @@ pub const IMAGE_REL_BASED_HIGHLOW: u16 = 3;
 pub const IMAGE_REL_BASED_HIGHADJ: u16 = 4;
 pub const IMAGE_REL_BASED_DIR64: u16 = 10;
 
+pub const IMAGE_ORDINAL_FLAG32: u32 = 0x80000000;
 pub const IMAGE_ORDINAL_FLAG64: u64 = 0x8000000000000000;
+
+#[derive(Clone, Copy, Debug)]
+pub enum PEArchitecture {
+    PE32,
+    PE32Plus,
+}
+
+pub enum OptionalHeader<'a> {
+    PE32(&'a ImageOptionalHeader32),
+    PE32Plus(&'a ImageOptionalHeader64),
+}
 
 pub struct PEParser<'a> {
     data: &'a [u8],
@@ -278,6 +371,14 @@ impl<'a> PEParser<'a> {
 
     pub fn get_base_relocation_directory(&self) -> Option<&ImageDataDirectory> {
         self.data_directory(IMAGE_DIRECTORY_ENTRY_BASERELOC)
+    }
+
+    pub fn get_tls_directory(&self) -> Option<&ImageDataDirectory> {
+        self.data_directory(IMAGE_DIRECTORY_ENTRY_TLS)
+    }
+
+    pub fn get_resource_directory(&self) -> Option<&ImageDataDirectory> {
+        self.data_directory(IMAGE_DIRECTORY_ENTRY_RESOURCE)
     }
 
     pub fn is_dll(&self) -> bool {
