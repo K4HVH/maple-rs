@@ -31,6 +31,7 @@ pub struct MemoryModuleBuilder {
     pub resolve_imports: bool,
     pub process_relocations: bool,
     pub call_dll_main: bool,
+    pub ignore_missing_imports: bool,
     pub alloc_function: Option<CustomAllocFunction>,
     pub free_function: Option<CustomFreeFunction>,
     pub load_library_function: Option<CustomLoadLibraryFunction>,
@@ -45,6 +46,7 @@ impl Default for MemoryModuleBuilder {
             resolve_imports: true,
             process_relocations: true,
             call_dll_main: true,
+            ignore_missing_imports: false,
             alloc_function: None,
             free_function: None,
             load_library_function: None,
@@ -72,6 +74,11 @@ impl MemoryModuleBuilder {
 
     pub fn call_dll_main(mut self, call: bool) -> Self {
         self.call_dll_main = call;
+        self
+    }
+
+    pub fn ignore_missing_imports(mut self, ignore: bool) -> Self {
+        self.ignore_missing_imports = ignore;
         self
     }
 

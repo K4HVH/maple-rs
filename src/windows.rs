@@ -74,7 +74,7 @@ impl WindowsMemoryModule {
         }
 
         if options.resolve_imports {
-            module.resolve_imports(data, &pe)?;
+            module.resolve_imports(data, &pe, options.ignore_missing_imports)?;
         }
 
         module.finalize_sections(&pe)?;
@@ -238,7 +238,7 @@ impl WindowsMemoryModule {
         Ok(())
     }
 
-    fn resolve_imports(&mut self, data: &[u8], pe: &PEParser) -> Result<()> {
+    fn resolve_imports(&mut self, data: &[u8], pe: &PEParser, ignore_missing: bool) -> Result<()> {
         let import_dir = match pe.get_import_directory() {
             Some(dir) if dir.size > 0 => dir,
             _ => return Ok(()),
@@ -291,11 +291,31 @@ impl WindowsMemoryModule {
 
                 let proc_address = if (thunk_value & IMAGE_ORDINAL_FLAG64) != 0 {
                     let ordinal = (thunk_value & 0xFFFF) as u16;
-                    self.get_proc_address_by_ordinal(dll_handle, ordinal)?
+                    match self.get_proc_address_by_ordinal(dll_handle, ordinal) {
+                        Ok(addr) => addr,
+                        Err(e) => {
+                            if ignore_missing {
+                                eprintln!("Warning: Missing ordinal import {} from {}: {}", ordinal, dll_name, e);
+                                std::ptr::null_mut()
+                            } else {
+                                return Err(e);
+                            }
+                        }
+                    }
                 } else {
                     let import_name_rva = thunk_value as u32;
                     let func_name = self.read_import_name(data, pe, import_name_rva)?;
-                    self.get_proc_address_by_name(dll_handle, &func_name)?
+                    match self.get_proc_address_by_name(dll_handle, &func_name) {
+                        Ok(addr) => addr,
+                        Err(e) => {
+                            if ignore_missing {
+                                eprintln!("Warning: Missing named import {} from {}: {}", func_name, dll_name, e);
+                                std::ptr::null_mut()
+                            } else {
+                                return Err(e);
+                            }
+                        }
+                    }
                 };
 
                 let iat_va = import_desc.first_thunk + thunk_offset;

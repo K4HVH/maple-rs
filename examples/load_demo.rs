@@ -58,5 +58,15 @@ fn main() -> Result<()> {
         }
     }
 
+    // Clean up the copied DLL
+    if Path::new("makcu-cpp.dll").exists() {
+        println!("\nCleaning up copied DLL...");
+        if let Err(e) = fs::remove_file("makcu-cpp.dll") {
+            eprintln!("Warning: Failed to clean up makcu-cpp.dll: {}", e);
+        } else {
+            println!("Cleaned up makcu-cpp.dll");
+        }
+    }
+
     Ok(())
 }
