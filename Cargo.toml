@@ -1,6 +1,6 @@
 [package]
 name = "maple-rs"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 authors = ["K4HVH"]
 description = "A Rust library for loading Windows PE executables and DLLs directly from memory without writing to disk"
@@ -37,3 +37,7 @@ path = "examples/load_demo.rs"
 [[example]]
 name = "load_focus"
 path = "examples/load_focus.rs"
+
+[[example]]
+name = "test_application_dll"
+path = "examples/test_application_dll.rs"

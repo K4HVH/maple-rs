@@ -7,6 +7,7 @@ Maple-rs is a Rust library that provides functionality for loading Windows PE ex
 ## Key Features
 
 - **In-Memory Loading**: Load PE executables (.exe) and dynamic libraries (.dll) directly from memory buffers
+- **Application DLL Support**: Execute applications compiled as DLLs with proper threading support
 - **Full PE Support**: Complete PE parsing, section handling, import resolution, and relocation processing
 - **Native Execution**: Applications run exactly as if they were loaded from disk
 - **Memory Management**: Proper memory allocation, protection, and cleanup
@@ -86,6 +87,27 @@ fn main() -> Result<()> {
 }
 ```
 
+### Application DLL Usage
+
+```rust
+use maple::{Maple, Result};
+use std::fs;
+
+fn main() -> Result<()> {
+    // Load an application DLL (e.g., focus.dll)
+    let data = fs::read("app.dll")?;
+    let module = Maple::load_application_dll_from_memory(&data)?;
+    
+    // Execute the application
+    module.execute_dll_application()?;
+    
+    // Application runs in background thread...
+    std::thread::sleep(std::time::Duration::from_secs(5));
+    
+    Ok(())
+}
+```
+
 ## Implementation Details
 
 ### PE Parsing
@@ -130,6 +152,7 @@ The library has been tested with:
 - **demo.exe**: A console application that depends on makcu-cpp.dll
 - **makcu-cpp.dll**: A library dependency
 - **focus.exe**: A GUI application with multiple dependencies
+- **focus.dll**: A GUI application compiled as DLL (OpenCV-based computer vision app)
 
 ### Expected Output
 

@@ -192,6 +192,67 @@ impl Maple {
     pub fn load_executable_from_memory(data: &[u8]) -> Result<Box<dyn MemoryModule>> {
         Self::load_library_from_memory(data)
     }
+
+    /// Loads an application DLL from a memory buffer.
+    ///
+    /// Application DLLs are DLLs that contain a main application but are compiled
+    /// as DLL files instead of executables. They typically start a thread in DllMain
+    /// that runs the application logic.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - Raw bytes of the PE DLL file to load
+    ///
+    /// # Returns
+    ///
+    /// Returns a `MemoryModule` trait object that can be used to execute
+    /// the application DLL using the `execute_dll_application` method.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use maple_rs::Maple;
+    /// use std::fs;
+    ///
+    /// let dll_data = fs::read("app.dll").unwrap();
+    /// let module = Maple::load_application_dll_from_memory(&dll_data).unwrap();
+    /// module.execute_dll_application().unwrap();
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns `MapleError` if:
+    /// - The PE format is invalid
+    /// - Memory allocation fails  
+    /// - Import resolution fails
+    /// - Platform is not supported
+    pub fn load_application_dll_from_memory(data: &[u8]) -> Result<Box<dyn MemoryModule>> {
+        #[cfg(windows)]
+        {
+            windows::WindowsMemoryModule::from_memory_with_options(
+                data,
+                &MemoryModuleBuilder::new()
+                    .resolve_imports(true)
+                    .process_relocations(true)
+                    .call_dll_main(false) // Don't call DllMain automatically for app DLLs
+                    .is_application_dll(true),
+            )
+            .map(|m| Box::new(m) as Box<dyn MemoryModule>)
+        }
+
+        #[cfg(unix)]
+        {
+            linux::LinuxMemoryModule::from_memory_with_options(
+                data,
+                &MemoryModuleBuilder::new()
+                    .resolve_imports(true)
+                    .process_relocations(true)
+                    .call_dll_main(false)
+                    .is_application_dll(true),
+            )
+            .map(|m| Box::new(m) as Box<dyn MemoryModule>)
+        }
+    }
 }
 
 #[cfg(test)]
