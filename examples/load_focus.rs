@@ -13,7 +13,7 @@ fn main() -> Result<()> {
     // Check if all the required DLLs are present in the focus directory
     let dll_files = [
         "abseil_dll.dll",
-        "jpeg62.dll", 
+        "jpeg62.dll",
         "libcrypto-3-x64.dll",
         "liblzma.dll",
         "libpng16.dll",
@@ -22,13 +22,13 @@ fn main() -> Result<()> {
         "libwebp.dll",
         "libwebpdecoder.dll",
         "opencv_core4.dll",
-        "opencv_dnn4.dll", 
+        "opencv_dnn4.dll",
         "opencv_highgui4.dll",
         "opencv_imgcodecs4.dll",
         "opencv_imgproc4.dll",
         "opencv_videoio4.dll",
         "tiff.dll",
-        "zlib1.dll"
+        "zlib1.dll",
     ];
 
     println!("Copying required DLLs to current directory...");
@@ -47,10 +47,10 @@ fn main() -> Result<()> {
 
     println!("\nLoading focus.exe from memory...");
     let focus_data = fs::read(focus_path)?;
-    
+
     println!("Creating memory module...");
     println!("Focus.exe size: {} bytes", focus_data.len());
-    
+
     match Maple::load_executable_from_memory(&focus_data) {
         Ok(module) => {
             println!("Successfully loaded focus.exe into memory");
@@ -60,7 +60,7 @@ fn main() -> Result<()> {
 
             println!("\nExecuting GUI application entry point...");
             println!("Note: This will launch the focus.exe GUI application from memory!");
-            
+
             match module.execute_entry_point() {
                 Ok(_) => println!("Entry point executed successfully (GUI should have appeared)"),
                 Err(e) => eprintln!("Failed to execute entry point: {}", e),

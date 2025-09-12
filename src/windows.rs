@@ -1,8 +1,8 @@
 use crate::{
-    error::MapleError,
-    memory_module::{MemoryModule, MemoryModuleBuilder, DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH},
-    pe::*,
     Result,
+    error::MapleError,
+    memory_module::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH, MemoryModule, MemoryModuleBuilder},
+    pe::*,
 };
 use std::collections::HashMap;
 use std::ffi::{CString, OsStr};
@@ -14,9 +14,9 @@ use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::libloaderapi::{GetProcAddress, LoadLibraryW};
 use winapi::um::memoryapi::{VirtualAlloc, VirtualFree, VirtualProtect};
 use winapi::um::winnt::{
-    IMAGE_SCN_MEM_EXECUTE, IMAGE_SCN_MEM_READ, IMAGE_SCN_MEM_WRITE,
-    MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_EXECUTE, PAGE_EXECUTE_READ,
-    PAGE_EXECUTE_READWRITE, PAGE_READONLY, PAGE_READWRITE,
+    IMAGE_SCN_MEM_EXECUTE, IMAGE_SCN_MEM_READ, IMAGE_SCN_MEM_WRITE, MEM_COMMIT, MEM_RELEASE,
+    MEM_RESERVE, PAGE_EXECUTE, PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE, PAGE_READONLY,
+    PAGE_READWRITE,
 };
 
 pub struct WindowsMemoryModule {
@@ -38,7 +38,7 @@ impl WindowsMemoryModule {
 
     pub fn from_memory_with_options(data: &[u8], options: &MemoryModuleBuilder) -> Result<Self> {
         let pe = PEParser::new(data)?;
-        
+
         let image_size = pe.size_of_image() as usize;
         let base_address = unsafe {
             VirtualAlloc(
@@ -78,27 +78,36 @@ impl WindowsMemoryModule {
         }
 
         module.finalize_sections(&pe)?;
-        
+
         // Process TLS callbacks
         module.process_tls_callbacks(&pe)?;
 
         let entry_point_rva = pe.entry_point();
         if entry_point_rva != 0 {
             let entry_point_va = unsafe { module.base_address.add(entry_point_rva as usize) };
-            
+
             if module.is_dll {
                 module.dll_entry = Some(unsafe {
-                    mem::transmute::<*mut u8, unsafe extern "system" fn(HMODULE, DWORD, LPVOID) -> BOOL>(entry_point_va)
+                    mem::transmute::<
+                        *mut u8,
+                        unsafe extern "system" fn(HMODULE, DWORD, LPVOID) -> BOOL,
+                    >(entry_point_va)
                 });
-                
+
                 if options.call_dll_main {
                     let dll_main = module.dll_entry.unwrap();
                     let result = unsafe {
-                        dll_main(module.base_address as HMODULE, DLL_PROCESS_ATTACH, ptr::null_mut())
+                        dll_main(
+                            module.base_address as HMODULE,
+                            DLL_PROCESS_ATTACH,
+                            ptr::null_mut(),
+                        )
                     };
-                    
+
                     if result == 0 {
-                        return Err(MapleError::ExecutionFailed("DLL initialization failed".to_string()));
+                        return Err(MapleError::ExecutionFailed(
+                            "DLL initialization failed".to_string(),
+                        ));
                     }
                 }
             } else {
@@ -140,11 +149,7 @@ impl WindowsMemoryModule {
             }
 
             unsafe {
-                ptr::copy_nonoverlapping(
-                    data[src_offset..].as_ptr(),
-                    dest,
-                    copy_size,
-                );
+                ptr::copy_nonoverlapping(data[src_offset..].as_ptr(), dest, copy_size);
             }
         }
 
@@ -168,28 +173,33 @@ impl WindowsMemoryModule {
                 break;
             }
 
-            let reloc_data = pe.get_data_at_rva(
-                reloc_dir.virtual_address + offset,
-                mem::size_of::<ImageBaseRelocation>(),
-            ).ok_or_else(|| {
-                MapleError::RelocationFailed("Failed to read relocation block".to_string())
-            })?;
+            let reloc_data = pe
+                .get_data_at_rva(
+                    reloc_dir.virtual_address + offset,
+                    mem::size_of::<ImageBaseRelocation>(),
+                )
+                .ok_or_else(|| {
+                    MapleError::RelocationFailed("Failed to read relocation block".to_string())
+                })?;
 
-            let reloc_block = unsafe {
-                &*(reloc_data.as_ptr() as *const ImageBaseRelocation)
-            };
+            let reloc_block = unsafe { &*(reloc_data.as_ptr() as *const ImageBaseRelocation) };
 
             if reloc_block.size_of_block < mem::size_of::<ImageBaseRelocation>() as u32 {
                 break;
             }
 
-            let entries_count = (reloc_block.size_of_block as usize - mem::size_of::<ImageBaseRelocation>()) / 2;
-            let entries_data = pe.get_data_at_rva(
-                reloc_dir.virtual_address + offset + mem::size_of::<ImageBaseRelocation>() as u32,
-                entries_count * 2,
-            ).ok_or_else(|| {
-                MapleError::RelocationFailed("Failed to read relocation entries".to_string())
-            })?;
+            let entries_count =
+                (reloc_block.size_of_block as usize - mem::size_of::<ImageBaseRelocation>()) / 2;
+            let entries_data = pe
+                .get_data_at_rva(
+                    reloc_dir.virtual_address
+                        + offset
+                        + mem::size_of::<ImageBaseRelocation>() as u32,
+                    entries_count * 2,
+                )
+                .ok_or_else(|| {
+                    MapleError::RelocationFailed("Failed to read relocation entries".to_string())
+                })?;
 
             for i in 0..entries_count {
                 let entry_offset = i * 2;
@@ -246,16 +256,17 @@ impl WindowsMemoryModule {
 
         let mut offset = 0usize;
         while offset + mem::size_of::<ImageImportDescriptor>() <= import_dir.size as usize {
-            let import_desc_data = pe.get_data_at_rva(
-                import_dir.virtual_address + offset as u32,
-                mem::size_of::<ImageImportDescriptor>(),
-            ).ok_or_else(|| {
-                MapleError::ImportResolution("Failed to read import descriptor".to_string())
-            })?;
+            let import_desc_data = pe
+                .get_data_at_rva(
+                    import_dir.virtual_address + offset as u32,
+                    mem::size_of::<ImageImportDescriptor>(),
+                )
+                .ok_or_else(|| {
+                    MapleError::ImportResolution("Failed to read import descriptor".to_string())
+                })?;
 
-            let import_desc = unsafe {
-                &*(import_desc_data.as_ptr() as *const ImageImportDescriptor)
-            };
+            let import_desc =
+                unsafe { &*(import_desc_data.as_ptr() as *const ImageImportDescriptor) };
 
             if import_desc.name == 0 {
                 break;
@@ -274,15 +285,21 @@ impl WindowsMemoryModule {
             loop {
                 let thunk_va = thunk_rva + thunk_offset;
                 let thunk_data = pe.get_data_at_rva(thunk_va, 8);
-                
+
                 if thunk_data.is_none() {
                     break;
                 }
 
                 let thunk_data = thunk_data.unwrap();
                 let thunk_value = u64::from_le_bytes([
-                    thunk_data[0], thunk_data[1], thunk_data[2], thunk_data[3],
-                    thunk_data[4], thunk_data[5], thunk_data[6], thunk_data[7],
+                    thunk_data[0],
+                    thunk_data[1],
+                    thunk_data[2],
+                    thunk_data[3],
+                    thunk_data[4],
+                    thunk_data[5],
+                    thunk_data[6],
+                    thunk_data[7],
                 ]);
 
                 if thunk_value == 0 {
@@ -295,7 +312,10 @@ impl WindowsMemoryModule {
                         Ok(addr) => addr,
                         Err(e) => {
                             if ignore_missing {
-                                eprintln!("Warning: Missing ordinal import {} from {}: {}", ordinal, dll_name, e);
+                                eprintln!(
+                                    "Warning: Missing ordinal import {} from {}: {}",
+                                    ordinal, dll_name, e
+                                );
                                 std::ptr::null_mut()
                             } else {
                                 return Err(e);
@@ -309,7 +329,10 @@ impl WindowsMemoryModule {
                         Ok(addr) => addr,
                         Err(e) => {
                             if ignore_missing {
-                                eprintln!("Warning: Missing named import {} from {}: {}", func_name, dll_name, e);
+                                eprintln!(
+                                    "Warning: Missing named import {} from {}: {}",
+                                    func_name, dll_name, e
+                                );
                                 std::ptr::null_mut()
                             } else {
                                 return Err(e);
@@ -388,11 +411,17 @@ impl WindowsMemoryModule {
             _ => return Ok(()),
         };
 
-        let tls_data = pe.get_data_at_rva(tls_dir.virtual_address, mem::size_of::<ImageTlsDirectory64>())
-            .ok_or_else(|| MapleError::ExecutionFailed("Failed to read TLS directory".to_string()))?;
+        let tls_data = pe
+            .get_data_at_rva(
+                tls_dir.virtual_address,
+                mem::size_of::<ImageTlsDirectory64>(),
+            )
+            .ok_or_else(|| {
+                MapleError::ExecutionFailed("Failed to read TLS directory".to_string())
+            })?;
 
         let tls_directory = unsafe { &*(tls_data.as_ptr() as *const ImageTlsDirectory64) };
-        
+
         if tls_directory.address_of_callbacks == 0 {
             return Ok(());
         }
@@ -409,11 +438,15 @@ impl WindowsMemoryModule {
                     break;
                 }
 
-                let callback: unsafe extern "system" fn(LPVOID, DWORD, LPVOID) = 
+                let callback: unsafe extern "system" fn(LPVOID, DWORD, LPVOID) =
                     mem::transmute(callback_addr);
-                
+
                 // Call TLS callback with DLL_PROCESS_ATTACH
-                callback(self.base_address as LPVOID, DLL_PROCESS_ATTACH, ptr::null_mut());
+                callback(
+                    self.base_address as LPVOID,
+                    DLL_PROCESS_ATTACH,
+                    ptr::null_mut(),
+                );
 
                 callback_ptr = callback_ptr.add(1);
             }
@@ -427,7 +460,10 @@ impl WindowsMemoryModule {
             return Ok(handle);
         }
 
-        let wide_name: Vec<u16> = OsStr::new(name).encode_wide().chain(std::iter::once(0)).collect();
+        let wide_name: Vec<u16> = OsStr::new(name)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
         let handle = unsafe { LoadLibraryW(wide_name.as_ptr()) };
 
         if handle.is_null() {
@@ -443,9 +479,8 @@ impl WindowsMemoryModule {
     }
 
     fn get_proc_address_by_name(&self, module: HMODULE, name: &str) -> Result<FARPROC> {
-        let c_name = CString::new(name).map_err(|_| {
-            MapleError::ImportResolution("Invalid function name".to_string())
-        })?;
+        let c_name = CString::new(name)
+            .map_err(|_| MapleError::ImportResolution("Invalid function name".to_string()))?;
 
         let proc = unsafe { GetProcAddress(module, c_name.as_ptr()) };
         if proc.is_null() {
@@ -471,18 +506,17 @@ impl WindowsMemoryModule {
     }
 
     fn read_string_at_rva(&self, data: &[u8], pe: &PEParser, rva: u32) -> Result<String> {
-        let offset = pe.rva_to_offset(rva).ok_or_else(|| {
-            MapleError::InvalidPEFormat("Invalid RVA for string".to_string())
-        })?;
+        let offset = pe
+            .rva_to_offset(rva)
+            .ok_or_else(|| MapleError::InvalidPEFormat("Invalid RVA for string".to_string()))?;
 
         let mut end = offset;
         while end < data.len() && data[end] != 0 {
             end += 1;
         }
 
-        String::from_utf8(data[offset..end].to_vec()).map_err(|_| {
-            MapleError::InvalidPEFormat("Invalid UTF-8 string".to_string())
-        })
+        String::from_utf8(data[offset..end].to_vec())
+            .map_err(|_| MapleError::InvalidPEFormat("Invalid UTF-8 string".to_string()))
     }
 
     fn read_import_name(&self, data: &[u8], pe: &PEParser, rva: u32) -> Result<String> {
@@ -491,7 +525,9 @@ impl WindowsMemoryModule {
         })?;
 
         if import_name_offset + 2 > data.len() {
-            return Err(MapleError::InvalidPEFormat("Import name out of bounds".to_string()));
+            return Err(MapleError::InvalidPEFormat(
+                "Import name out of bounds".to_string(),
+            ));
         }
 
         let name_offset = import_name_offset + 2;
@@ -500,9 +536,8 @@ impl WindowsMemoryModule {
             end += 1;
         }
 
-        String::from_utf8(data[name_offset..end].to_vec()).map_err(|_| {
-            MapleError::InvalidPEFormat("Invalid UTF-8 import name".to_string())
-        })
+        String::from_utf8(data[name_offset..end].to_vec())
+            .map_err(|_| MapleError::InvalidPEFormat("Invalid UTF-8 import name".to_string()))
     }
 }
 
@@ -515,10 +550,18 @@ impl MemoryModule for WindowsMemoryModule {
         let pe = PEParser::new(&self.pe_data)?;
         let export_dir = match pe.get_export_directory() {
             Some(dir) if dir.size > 0 => dir,
-            _ => return Err(MapleError::SymbolNotFound("No export directory".to_string())),
+            _ => {
+                return Err(MapleError::SymbolNotFound(
+                    "No export directory".to_string(),
+                ));
+            }
         };
 
-        let export_data = pe.get_data_at_rva(export_dir.virtual_address, mem::size_of::<ImageExportDirectory>())
+        let export_data = pe
+            .get_data_at_rva(
+                export_dir.virtual_address,
+                mem::size_of::<ImageExportDirectory>(),
+            )
             .ok_or_else(|| MapleError::SymbolNotFound("Invalid export directory".to_string()))?;
 
         let export_desc = unsafe { &*(export_data.as_ptr() as *const ImageExportDirectory) };
@@ -532,29 +575,40 @@ impl MemoryModule for WindowsMemoryModule {
         let functions_rva = export_desc.address_of_functions;
 
         for i in 0..export_desc.number_of_names {
-            let name_ptr_rva_data = pe.get_data_at_rva(names_rva + i * 4, 4)
+            let name_ptr_rva_data = pe
+                .get_data_at_rva(names_rva + i * 4, 4)
                 .ok_or_else(|| MapleError::SymbolNotFound("Invalid name pointer".to_string()))?;
             let name_ptr_rva = u32::from_le_bytes([
-                name_ptr_rva_data[0], name_ptr_rva_data[1], 
-                name_ptr_rva_data[2], name_ptr_rva_data[3]
+                name_ptr_rva_data[0],
+                name_ptr_rva_data[1],
+                name_ptr_rva_data[2],
+                name_ptr_rva_data[3],
             ]);
 
             let export_name = self.read_string_at_rva(&self.pe_data, &pe, name_ptr_rva)?;
-            
+
             if export_name == name {
-                let ordinal_data = pe.get_data_at_rva(ordinals_rva + i * 2, 2)
+                let ordinal_data = pe
+                    .get_data_at_rva(ordinals_rva + i * 2, 2)
                     .ok_or_else(|| MapleError::SymbolNotFound("Invalid ordinal".to_string()))?;
                 let ordinal = u16::from_le_bytes([ordinal_data[0], ordinal_data[1]]);
 
-                let function_rva_data = pe.get_data_at_rva(functions_rva + ordinal as u32 * 4, 4)
-                    .ok_or_else(|| MapleError::SymbolNotFound("Invalid function RVA".to_string()))?;
+                let function_rva_data = pe
+                    .get_data_at_rva(functions_rva + ordinal as u32 * 4, 4)
+                    .ok_or_else(|| {
+                    MapleError::SymbolNotFound("Invalid function RVA".to_string())
+                })?;
                 let function_rva = u32::from_le_bytes([
-                    function_rva_data[0], function_rva_data[1],
-                    function_rva_data[2], function_rva_data[3]
+                    function_rva_data[0],
+                    function_rva_data[1],
+                    function_rva_data[2],
+                    function_rva_data[3],
                 ]);
 
                 if function_rva == 0 {
-                    return Err(MapleError::SymbolNotFound("Function not implemented".to_string()));
+                    return Err(MapleError::SymbolNotFound(
+                        "Function not implemented".to_string(),
+                    ));
                 }
 
                 let function_va = unsafe { self.base_address.add(function_rva as usize) };
@@ -562,7 +616,10 @@ impl MemoryModule for WindowsMemoryModule {
             }
         }
 
-        Err(MapleError::SymbolNotFound(format!("Function {} not found", name)))
+        Err(MapleError::SymbolNotFound(format!(
+            "Function {} not found",
+            name
+        )))
     }
 
     fn get_proc_address_ordinal(&self, ordinal: u16) -> Result<*const u8> {
@@ -573,30 +630,45 @@ impl MemoryModule for WindowsMemoryModule {
         let pe = PEParser::new(&self.pe_data)?;
         let export_dir = match pe.get_export_directory() {
             Some(dir) if dir.size > 0 => dir,
-            _ => return Err(MapleError::SymbolNotFound("No export directory".to_string())),
+            _ => {
+                return Err(MapleError::SymbolNotFound(
+                    "No export directory".to_string(),
+                ));
+            }
         };
 
-        let export_data = pe.get_data_at_rva(export_dir.virtual_address, mem::size_of::<ImageExportDirectory>())
+        let export_data = pe
+            .get_data_at_rva(
+                export_dir.virtual_address,
+                mem::size_of::<ImageExportDirectory>(),
+            )
             .ok_or_else(|| MapleError::SymbolNotFound("Invalid export directory".to_string()))?;
 
         let export_desc = unsafe { &*(export_data.as_ptr() as *const ImageExportDirectory) };
 
-        if ordinal < export_desc.base as u16 || ordinal >= (export_desc.base + export_desc.number_of_functions) as u16 {
+        if ordinal < export_desc.base as u16
+            || ordinal >= (export_desc.base + export_desc.number_of_functions) as u16
+        {
             return Err(MapleError::SymbolNotFound("Invalid ordinal".to_string()));
         }
 
         let function_index = (ordinal - export_desc.base as u16) as u32;
         let functions_rva = export_desc.address_of_functions;
 
-        let function_rva_data = pe.get_data_at_rva(functions_rva + function_index * 4, 4)
+        let function_rva_data = pe
+            .get_data_at_rva(functions_rva + function_index * 4, 4)
             .ok_or_else(|| MapleError::SymbolNotFound("Invalid function RVA".to_string()))?;
         let function_rva = u32::from_le_bytes([
-            function_rva_data[0], function_rva_data[1],
-            function_rva_data[2], function_rva_data[3]
+            function_rva_data[0],
+            function_rva_data[1],
+            function_rva_data[2],
+            function_rva_data[3],
         ]);
 
         if function_rva == 0 {
-            return Err(MapleError::SymbolNotFound("Function not implemented".to_string()));
+            return Err(MapleError::SymbolNotFound(
+                "Function not implemented".to_string(),
+            ));
         }
 
         let function_va = unsafe { self.base_address.add(function_rva as usize) };
@@ -609,7 +681,9 @@ impl MemoryModule for WindowsMemoryModule {
         }
 
         if self.is_dll {
-            return Err(MapleError::ExecutionFailed("Cannot execute DLL entry point".to_string()));
+            return Err(MapleError::ExecutionFailed(
+                "Cannot execute DLL entry point".to_string(),
+            ));
         }
 
         match self.entry_point {
@@ -617,7 +691,9 @@ impl MemoryModule for WindowsMemoryModule {
                 unsafe { entry() };
                 Ok(())
             }
-            None => Err(MapleError::ExecutionFailed("No entry point found".to_string())),
+            None => Err(MapleError::ExecutionFailed(
+                "No entry point found".to_string(),
+            )),
         }
     }
 
@@ -632,9 +708,8 @@ impl MemoryModule for WindowsMemoryModule {
 
         match self.dll_entry {
             Some(dll_main) => {
-                let result = unsafe {
-                    dll_main(self.base_address as HMODULE, reason, ptr::null_mut())
-                };
+                let result =
+                    unsafe { dll_main(self.base_address as HMODULE, reason, ptr::null_mut()) };
                 Ok(result != 0)
             }
             None => Ok(true),
@@ -679,7 +754,12 @@ impl MemoryModule for WindowsMemoryModule {
         self.find_resource_ex(name, resource_type, 0)
     }
 
-    fn find_resource_ex(&self, _name: Option<&str>, _resource_type: Option<&str>, _language: u16) -> Result<*const u8> {
+    fn find_resource_ex(
+        &self,
+        _name: Option<&str>,
+        _resource_type: Option<&str>,
+        _language: u16,
+    ) -> Result<*const u8> {
         if !self.is_loaded {
             return Err(MapleError::ExecutionFailed("Module not loaded".to_string()));
         }
@@ -687,7 +767,11 @@ impl MemoryModule for WindowsMemoryModule {
         let pe = PEParser::new(&self.pe_data)?;
         let _resource_dir = match pe.get_resource_directory() {
             Some(dir) if dir.size > 0 => dir,
-            _ => return Err(MapleError::SymbolNotFound("No resource directory".to_string())),
+            _ => {
+                return Err(MapleError::SymbolNotFound(
+                    "No resource directory".to_string(),
+                ));
+            }
         };
 
         // For now, return a placeholder implementation
@@ -699,18 +783,22 @@ impl MemoryModule for WindowsMemoryModule {
         if !self.is_loaded {
             return Err(MapleError::ExecutionFailed("Module not loaded".to_string()));
         }
-        
+
         // Placeholder implementation
-        Err(MapleError::SymbolNotFound("Resource size not available".to_string()))
+        Err(MapleError::SymbolNotFound(
+            "Resource size not available".to_string(),
+        ))
     }
 
     fn load_resource(&self, _resource: *const u8) -> Result<*const u8> {
         if !self.is_loaded {
             return Err(MapleError::ExecutionFailed("Module not loaded".to_string()));
         }
-        
+
         // Placeholder implementation
-        Err(MapleError::SymbolNotFound("Resource data not available".to_string()))
+        Err(MapleError::SymbolNotFound(
+            "Resource data not available".to_string(),
+        ))
     }
 
     fn load_string(&self, id: u32, buffer: &mut [u16]) -> Result<usize> {
@@ -721,9 +809,11 @@ impl MemoryModule for WindowsMemoryModule {
         if !self.is_loaded {
             return Err(MapleError::ExecutionFailed("Module not loaded".to_string()));
         }
-        
+
         // Placeholder implementation
-        Err(MapleError::SymbolNotFound("String resource not found".to_string()))
+        Err(MapleError::SymbolNotFound(
+            "String resource not found".to_string(),
+        ))
     }
 }
 

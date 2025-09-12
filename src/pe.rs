@@ -247,18 +247,24 @@ pub struct PEParser<'a> {
 impl<'a> PEParser<'a> {
     pub fn new(data: &'a [u8]) -> Result<Self> {
         if data.len() < mem::size_of::<ImageDosHeader>() {
-            return Err(MapleError::InvalidPEFormat("File too small for DOS header".to_string()));
+            return Err(MapleError::InvalidPEFormat(
+                "File too small for DOS header".to_string(),
+            ));
         }
 
         let dos_header = unsafe { &*(data.as_ptr() as *const ImageDosHeader) };
 
         if dos_header.e_magic != IMAGE_DOS_SIGNATURE {
-            return Err(MapleError::InvalidPEFormat("Invalid DOS signature".to_string()));
+            return Err(MapleError::InvalidPEFormat(
+                "Invalid DOS signature".to_string(),
+            ));
         }
 
         let nt_headers_offset = dos_header.e_lfanew as usize;
         if nt_headers_offset + 4 > data.len() {
-            return Err(MapleError::InvalidPEFormat("Invalid NT headers offset".to_string()));
+            return Err(MapleError::InvalidPEFormat(
+                "Invalid NT headers offset".to_string(),
+            ));
         }
 
         let nt_signature = u32::from_le_bytes([
@@ -269,28 +275,39 @@ impl<'a> PEParser<'a> {
         ]);
 
         if nt_signature != IMAGE_NT_SIGNATURE {
-            return Err(MapleError::InvalidPEFormat("Invalid NT signature".to_string()));
+            return Err(MapleError::InvalidPEFormat(
+                "Invalid NT signature".to_string(),
+            ));
         }
 
         let file_header_offset = nt_headers_offset + 4;
         if file_header_offset + mem::size_of::<ImageFileHeader>() > data.len() {
-            return Err(MapleError::InvalidPEFormat("Invalid file header".to_string()));
+            return Err(MapleError::InvalidPEFormat(
+                "Invalid file header".to_string(),
+            ));
         }
 
-        let file_header = unsafe { &*(data[file_header_offset..].as_ptr() as *const ImageFileHeader) };
+        let file_header =
+            unsafe { &*(data[file_header_offset..].as_ptr() as *const ImageFileHeader) };
 
         let optional_header_offset = file_header_offset + mem::size_of::<ImageFileHeader>();
         if optional_header_offset + mem::size_of::<ImageOptionalHeader64>() > data.len() {
-            return Err(MapleError::InvalidPEFormat("Invalid optional header".to_string()));
+            return Err(MapleError::InvalidPEFormat(
+                "Invalid optional header".to_string(),
+            ));
         }
 
-        let optional_header = unsafe { &*(data[optional_header_offset..].as_ptr() as *const ImageOptionalHeader64) };
+        let optional_header =
+            unsafe { &*(data[optional_header_offset..].as_ptr() as *const ImageOptionalHeader64) };
 
         if optional_header.magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC {
-            return Err(MapleError::InvalidPEFormat("Not a 64-bit executable".to_string()));
+            return Err(MapleError::InvalidPEFormat(
+                "Not a 64-bit executable".to_string(),
+            ));
         }
 
-        let data_directories_offset = optional_header_offset + mem::size_of::<ImageOptionalHeader64>();
+        let data_directories_offset =
+            optional_header_offset + mem::size_of::<ImageOptionalHeader64>();
         let data_directories = unsafe {
             std::slice::from_raw_parts(
                 data[data_directories_offset..].as_ptr() as *const ImageDataDirectory,
@@ -302,12 +319,16 @@ impl<'a> PEParser<'a> {
         let mut sections = Vec::new();
 
         for i in 0..file_header.number_of_sections {
-            let section_offset = sections_offset + i as usize * mem::size_of::<ImageSectionHeader>();
+            let section_offset =
+                sections_offset + i as usize * mem::size_of::<ImageSectionHeader>();
             if section_offset + mem::size_of::<ImageSectionHeader>() > data.len() {
-                return Err(MapleError::InvalidPEFormat("Invalid section header".to_string()));
+                return Err(MapleError::InvalidPEFormat(
+                    "Invalid section header".to_string(),
+                ));
             }
 
-            let section = unsafe { &*(data[section_offset..].as_ptr() as *const ImageSectionHeader) };
+            let section =
+                unsafe { &*(data[section_offset..].as_ptr() as *const ImageSectionHeader) };
             sections.push(section);
         }
 
@@ -344,7 +365,9 @@ impl<'a> PEParser<'a> {
 
     pub fn rva_to_offset(&self, rva: u32) -> Option<usize> {
         for section in &self.sections {
-            if rva >= section.virtual_address && rva < section.virtual_address + section.virtual_size {
+            if rva >= section.virtual_address
+                && rva < section.virtual_address + section.virtual_size
+            {
                 let offset = rva - section.virtual_address;
                 return Some(section.pointer_to_raw_data as usize + offset as usize);
             }

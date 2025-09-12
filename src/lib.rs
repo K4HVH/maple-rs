@@ -202,12 +202,12 @@ mod tests {
         let _maple = Maple;
     }
 
-    #[test] 
+    #[test]
     fn test_result_type() {
         let success: Result<i32> = Ok(42);
         let failure: Result<i32> = Err(MapleError::InvalidPEFormat("test".to_string()));
-        
-        assert_eq!(success.unwrap(), 42);
+
+        assert_eq!(success, Ok(42));
         assert!(failure.is_err());
     }
 }
