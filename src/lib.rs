@@ -97,6 +97,8 @@
 pub mod error;
 pub mod memory_module;
 pub mod pe;
+
+#[cfg(windows)]
 pub mod windows;
 
 #[cfg(unix)]

@@ -64,4 +64,49 @@ impl MemoryModule for LinuxMemoryModule {
     fn size(&self) -> usize {
         0
     }
+
+    fn find_resource(
+        &self,
+        _name: Option<&str>,
+        _resource_type: Option<&str>,
+    ) -> Result<*const u8> {
+        Err(MapleError::PlatformNotSupported(
+            "Linux implementation not yet available".to_string(),
+        ))
+    }
+
+    fn find_resource_ex(
+        &self,
+        _name: Option<&str>,
+        _resource_type: Option<&str>,
+        _language: u16,
+    ) -> Result<*const u8> {
+        Err(MapleError::PlatformNotSupported(
+            "Linux implementation not yet available".to_string(),
+        ))
+    }
+
+    fn sizeof_resource(&self, _resource: *const u8) -> Result<usize> {
+        Err(MapleError::PlatformNotSupported(
+            "Linux implementation not yet available".to_string(),
+        ))
+    }
+
+    fn load_resource(&self, _resource: *const u8) -> Result<*const u8> {
+        Err(MapleError::PlatformNotSupported(
+            "Linux implementation not yet available".to_string(),
+        ))
+    }
+
+    fn load_string(&self, _id: u32, _buffer: &mut [u16]) -> Result<usize> {
+        Err(MapleError::PlatformNotSupported(
+            "Linux implementation not yet available".to_string(),
+        ))
+    }
+
+    fn load_string_ex(&self, _id: u32, _buffer: &mut [u16], _language: u16) -> Result<usize> {
+        Err(MapleError::PlatformNotSupported(
+            "Linux implementation not yet available".to_string(),
+        ))
+    }
 }
