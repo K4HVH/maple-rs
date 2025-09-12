@@ -211,6 +211,8 @@ jobs:
     - name: Publish to crates.io
       if: steps.check_version.outputs.should_publish == 'true'
       run: cargo publish
+      continue-on-error: true
+      id: publish_step
     
     - name: Create GitHub Release
       if: steps.check_version.outputs.should_publish == 'true'
