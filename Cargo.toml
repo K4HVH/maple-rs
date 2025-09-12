@@ -7,24 +7,17 @@ license = "MIT"
 repository = "https://github.com/K4HVH/maple-rs"
 
 [dependencies]
-thiserror = "1.0"
-memoffset = "0.9"
+thiserror = "2.0"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = [
     "winnt",
-    "minwinbase",
+    "minwindef",
     "memoryapi",
-    "processthreadsapi",
     "libloaderapi",
-    "errhandlingapi",
-    "psapi",
-    "winerror",
-    "impl-default"
+    "errhandlingapi"
 ] }
 
-[target.'cfg(unix)'.dependencies]
-libc = "0.2"
 
 [lib]
 name = "maple"
@@ -37,43 +30,3 @@ path = "examples/load_demo.rs"
 [[example]]
 name = "load_focus"
 path = "examples/load_focus.rs"
-
-[[example]]
-name = "test_realworld_apps"
-path = "examples/test_realworld_apps.rs"
-
-[[example]]
-name = "final_verification"
-path = "examples/final_verification.rs"
-
-[[example]]
-name = "debug_imports"
-path = "examples/debug_imports.rs"
-
-[[example]]
-name = "check_ordinals"
-path = "examples/check_ordinals.rs"
-
-[[example]]
-name = "run_realworld_demo"
-path = "examples/run_realworld_demo.rs"
-
-[[example]]
-name = "simple_execution_demo"
-path = "examples/simple_execution_demo.rs"
-
-[[example]]
-name = "gui_execution_demo"
-path = "examples/gui_execution_demo.rs"
-
-[[example]]
-name = "notepadpp_demo"
-path = "examples/notepadpp_demo.rs"
-
-[[example]]
-name = "notepadpp_safe_demo" 
-path = "examples/notepadpp_safe_demo.rs"
-
-[[example]]
-name = "notepadpp_loading_demo"
-path = "examples/notepadpp_loading_demo.rs"
