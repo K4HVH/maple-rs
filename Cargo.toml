@@ -1,10 +1,10 @@
 [package]
 name = "maple-rs"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["K4HVH"]
 description = "A Rust library for loading Windows PE executables and DLLs directly from memory without writing to disk"
-license = "MIT"
+license = "GPL-3.0"
 repository = "https://github.com/K4HVH/maple-rs"
 homepage = "https://github.com/K4HVH/maple-rs"
 documentation = "https://docs.rs/maple-rs"
