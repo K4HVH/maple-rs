@@ -1,4 +1,4 @@
-use maple::{Maple, Result};
+use maple_rs::{Maple, Result};
 use std::fs;
 use std::path::Path;
 
