@@ -3,11 +3,11 @@
 [![Crates.io](https://img.shields.io/crates/v/maple-rs.svg)](https://crates.io/crates/maple-rs)
 [![Documentation](https://docs.rs/maple-rs/badge.svg)](https://docs.rs/maple-rs)
 [![Build Status](https://github.com/K4HVH/maple-rs/workflows/CI/badge.svg)](https://github.com/K4HVH/maple-rs/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 A Rust library for loading Windows PE executables and DLLs directly from memory, without needing to write them to disk first. This is a modern, memory-safe Rust replacement for the C memorymodule library.
 
-## ⚠️ Security Notice
+## Security Notice
 
 This library enables loading and executing code from memory buffers. While this has legitimate uses such as:
 - Dynamic code loading in game engines
@@ -17,7 +17,7 @@ This library enables loading and executing code from memory buffers. While this 
 
 **Users are responsible for ensuring they only load trusted code and comply with all applicable laws and security policies.**
 
-## ✨ Features
+## Features
 
 - 🔹 **In-Memory Loading**: Load PE executables (.exe) and libraries (.dll) directly from memory
 - 🔹 **Full PE Support**: Complete PE parsing, import resolution, and relocation processing  
@@ -26,7 +26,7 @@ This library enables loading and executing code from memory buffers. While this 
 - 🔹 **Cross-Platform Ready**: Windows implementation complete, Linux planned
 - 🔹 **Zero-Copy**: Efficient memory usage with minimal overhead
 
-## 🚀 Quick Start
+## Quick Start
 
 Add this to your `Cargo.toml`:
 
@@ -75,11 +75,11 @@ fn main() -> Result<()> {
 }
 ```
 
-## 📖 Documentation
+## Documentation
 
 Comprehensive API documentation is available on [docs.rs](https://docs.rs/maple-rs).
 
-## 🛠️ Platform Support
+## Platform Support
 
 | Platform | Status | Features |
 |----------|--------|----------|
@@ -87,28 +87,7 @@ Comprehensive API documentation is available on [docs.rs](https://docs.rs/maple-
 | Linux | 🔄 Planned | ELF support planned for future release |
 | macOS | 🔄 Planned | Mach-O support planned for future release |
 
-## 🧪 Testing
-
-The library includes comprehensive tests covering:
-
-```bash
-# Run all tests
-cargo test
-
-# Run with coverage
-cargo tarpaulin --verbose --all-features --workspace --timeout 120
-
-# Run examples
-cargo run --example load_demo
-cargo run --example load_focus
-```
-
-Tested with real-world executables including:
-- Console applications with dependencies
-- GUI applications with multiple DLLs
-- Complex import/export scenarios
-
-## 🔧 Error Handling
+## Error Handling
 
 All operations return a `Result<T, MapleError>` with detailed error information:
 
@@ -134,7 +113,7 @@ match Maple::load_executable_from_memory(&data) {
 }
 ```
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 maple-rs/
@@ -150,44 +129,14 @@ maple-rs/
 └── .github/workflows/    # CI/CD pipeline
 ```
 
-## 🔐 Security Considerations
-
-- Memory is properly allocated and protected with appropriate permissions
-- No disk writes required (stealth loading capability)
-- Import validation prevents malicious DLL injection
-- Proper cleanup prevents memory leaks
-- PE validation prevents malformed executables
-- Comprehensive error handling for security failures
-
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
 
-### Development Setup
+## License
 
-```bash
-git clone https://github.com/K4HVH/maple-rs.git
-cd maple-rs
-cargo build
-cargo test
-```
+This project is licensed under the GNU GPLv3 License - see the [LICENSE](LICENSE) file for details.
 
-## 📜 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Inspired by the original [MemoryModule](https://github.com/fancycode/MemoryModule) C library
-- Built with modern Rust safety and performance characteristics
-- Thanks to the Rust community for excellent crates and tooling
-
-## 📚 Related Projects
-
-- [MemoryModule](https://github.com/fancycode/MemoryModule) - Original C implementation
-- [pe](https://crates.io/crates/pe) - PE format parsing
-- [goblin](https://crates.io/crates/goblin) - Multi-format binary parsing
-
----
-
-**⚠️ Disclaimer**: This software is provided for educational and legitimate use cases only. Users must ensure compliance with all applicable laws and regulations in their jurisdiction.

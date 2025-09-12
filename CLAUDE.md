@@ -215,7 +215,7 @@ cargo run --example load_demo
 
 ## License
 
-MIT License - See LICENSE file for details.
+GPL-3.0 License - See LICENSE file for details.
 
 ## Contributing
 
