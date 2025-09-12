@@ -1,7 +1,7 @@
 use crate::{
+    Result,
     error::MapleError,
     memory_module::{MemoryModule, MemoryModuleBuilder},
-    Result,
 };
 
 pub struct LinuxMemoryModule {
@@ -15,10 +15,7 @@ impl LinuxMemoryModule {
         ))
     }
 
-    pub fn from_memory_with_options(
-        _data: &[u8],
-        _options: &MemoryModuleBuilder,
-    ) -> Result<Self> {
+    pub fn from_memory_with_options(_data: &[u8], _options: &MemoryModuleBuilder) -> Result<Self> {
         Err(MapleError::PlatformNotSupported(
             "Linux implementation not yet available".to_string(),
         ))

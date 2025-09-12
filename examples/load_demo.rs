@@ -23,7 +23,7 @@ fn main() -> Result<()> {
 
     println!("Loading demo.exe from memory...");
     let demo_data = fs::read(demo_path)?;
-    
+
     println!("Creating memory module...");
     match Maple::load_executable_from_memory(&demo_data) {
         Ok(module) => {
@@ -45,7 +45,7 @@ fn main() -> Result<()> {
 
     println!("\nLoading makcu-cpp.dll from memory...");
     let dll_data = fs::read(dll_path)?;
-    
+
     match Maple::load_library_from_memory(&dll_data) {
         Ok(module) => {
             println!("Successfully loaded makcu-cpp.dll into memory");
