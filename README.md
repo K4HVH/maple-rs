@@ -10,6 +10,7 @@ A Rust library for loading Windows PE executables and DLLs directly from memory,
 ## Security Notice
 
 This library enables loading and executing code from memory buffers. While this has legitimate uses such as:
+
 - Dynamic code loading in game engines
 - Plugin systems  
 - Testing and debugging tools
@@ -20,6 +21,7 @@ This library enables loading and executing code from memory buffers. While this 
 ## Features
 
 - 🔹 **In-Memory Loading**: Load PE executables (.exe) and libraries (.dll) directly from memory
+- 🔹 **Application DLL Support**: Execute applications compiled as DLLs with proper threading
 - 🔹 **Full PE Support**: Complete PE parsing, import resolution, and relocation processing  
 - 🔹 **Native Execution**: Code runs exactly as if loaded from disk
 - 🔹 **Memory Safety**: Proper memory management with automatic cleanup
@@ -53,7 +55,7 @@ fn main() -> Result<()> {
 }
 ```
 
-### Advanced Usage with Builder Pattern
+### Loading Regular DLLs
 
 ```rust
 use maple_rs::{MemoryModuleBuilder, Result};
@@ -75,6 +77,78 @@ fn main() -> Result<()> {
 }
 ```
 
+### Loading Application DLLs
+
+Application DLLs are applications that have been compiled as DLL files instead of executables. They typically start a thread in `DllMain` to run the application logic.
+
+```rust
+use maple_rs::{Maple, Result};
+use std::fs;
+
+fn main() -> Result<()> {
+    // Load an application DLL (like focus.dll)
+    let data = fs::read("app.dll")?;
+    let module = Maple::load_application_dll_from_memory(&data)?;
+    
+    // Execute the application
+    module.execute_dll_application()?;
+    
+    // Application runs in background thread...
+    std::thread::sleep(std::time::Duration::from_secs(5));
+    
+    Ok(())
+}
+```
+
+### Manual Control with Builder Pattern
+
+For advanced control over application DLL loading:
+
+```rust
+use maple_rs::{MemoryModuleBuilder, Result};
+use std::fs;
+
+fn main() -> Result<()> {
+    let data = fs::read("app.dll")?;
+    
+    let module = MemoryModuleBuilder::new()
+        .resolve_imports(true)
+        .process_relocations(true)
+        .call_dll_main(false)        // Don't auto-call DllMain
+        .is_application_dll(true)     // Mark as application DLL
+        .load_from_memory(&data)?;
+    
+    // Manually execute when ready
+    module.execute_dll_application()?;
+    
+    Ok(())
+}
+```
+
+## API Reference
+
+### Main Entry Points
+
+- `Maple::load_executable_from_memory(data)` - Load a standard executable
+- `Maple::load_library_from_memory(data)` - Load a standard DLL/library  
+- `Maple::load_application_dll_from_memory(data)` - Load an application DLL
+
+### MemoryModule Trait Methods
+
+- `execute_entry_point()` - Execute an executable's entry point
+- `execute_dll_application()` - Execute an application DLL (starts thread in DllMain)
+- `call_dll_entry_point(reason)` - Manually call DllMain with specific reason
+- `get_proc_address(name)` - Get function address by name
+- `get_proc_address_ordinal(ordinal)` - Get function address by ordinal
+
+### Builder Options
+
+- `resolve_imports(bool)` - Enable/disable import resolution
+- `process_relocations(bool)` - Enable/disable relocation processing
+- `call_dll_main(bool)` - Auto-call DllMain on load
+- `is_application_dll(bool)` - Mark as application DLL
+- `ignore_missing_imports(bool)` - Continue loading with missing imports
+
 ## Documentation
 
 Comprehensive API documentation is available on [docs.rs](https://docs.rs/maple-rs).
@@ -83,7 +157,7 @@ Comprehensive API documentation is available on [docs.rs](https://docs.rs/maple-
 
 | Platform | Status | Features |
 |----------|--------|----------|
-| Windows | ✅ Complete | Full PE parsing, import resolution, memory protection |
+| Windows | ✅ Complete | Full PE parsing, import resolution, memory protection, application DLLs |
 | Linux | 🔄 Planned | ELF support planned for future release |
 | macOS | 🔄 Planned | Mach-O support planned for future release |
 
@@ -115,7 +189,7 @@ match Maple::load_executable_from_memory(&data) {
 
 ## Architecture
 
-```
+``` bash
 maple-rs/
 ├── src/
 │   ├── lib.rs              # Main library interface

@@ -94,7 +94,7 @@ impl WindowsMemoryModule {
                     >(entry_point_va)
                 });
 
-                if options.call_dll_main {
+                if options.call_dll_main && !options.is_application_dll {
                     let dll_main = module.dll_entry.unwrap();
                     let result = unsafe {
                         dll_main(
@@ -713,6 +713,38 @@ impl MemoryModule for WindowsMemoryModule {
                 Ok(result != 0)
             }
             None => Ok(true),
+        }
+    }
+
+    fn execute_dll_application(&self) -> Result<()> {
+        if !self.is_loaded {
+            return Err(MapleError::ExecutionFailed("Module not loaded".to_string()));
+        }
+
+        if !self.is_dll {
+            return Err(MapleError::ExecutionFailed("Not a DLL".to_string()));
+        }
+
+        match self.dll_entry {
+            Some(dll_main) => {
+                // Call DLL_PROCESS_ATTACH to initialize the application DLL
+                let result = unsafe {
+                    dll_main(
+                        self.base_address as HMODULE,
+                        DLL_PROCESS_ATTACH,
+                        ptr::null_mut(),
+                    )
+                };
+                if result == 0 {
+                    return Err(MapleError::ExecutionFailed(
+                        "DLL application initialization failed".to_string(),
+                    ));
+                }
+                Ok(())
+            }
+            None => Err(MapleError::ExecutionFailed(
+                "No DLL entry point found".to_string(),
+            )),
         }
     }
 

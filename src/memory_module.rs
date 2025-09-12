@@ -6,6 +6,7 @@ pub trait MemoryModule {
     fn get_proc_address_ordinal(&self, ordinal: u16) -> Result<*const u8>;
     fn execute_entry_point(&self) -> Result<()>;
     fn call_dll_entry_point(&self, reason: u32) -> Result<bool>;
+    fn execute_dll_application(&self) -> Result<()>;
     fn free(&mut self) -> Result<()>;
     fn is_loaded(&self) -> bool;
     fn base_address(&self) -> *const u8;
@@ -46,6 +47,7 @@ pub struct MemoryModuleBuilder {
     pub process_relocations: bool,
     pub call_dll_main: bool,
     pub ignore_missing_imports: bool,
+    pub is_application_dll: bool,
     pub alloc_function: Option<CustomAllocFunction>,
     pub free_function: Option<CustomFreeFunction>,
     pub load_library_function: Option<CustomLoadLibraryFunction>,
@@ -61,6 +63,7 @@ impl Default for MemoryModuleBuilder {
             process_relocations: true,
             call_dll_main: true,
             ignore_missing_imports: false,
+            is_application_dll: false,
             alloc_function: None,
             free_function: None,
             load_library_function: None,
@@ -93,6 +96,11 @@ impl MemoryModuleBuilder {
 
     pub fn ignore_missing_imports(mut self, ignore: bool) -> Self {
         self.ignore_missing_imports = ignore;
+        self
+    }
+
+    pub fn is_application_dll(mut self, is_app_dll: bool) -> Self {
+        self.is_application_dll = is_app_dll;
         self
     }
 

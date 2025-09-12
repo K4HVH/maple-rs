@@ -5,6 +5,7 @@ use std::path::Path;
 fn main() -> Result<()> {
     let demo_path = Path::new("test/demo.exe");
     let dll_path = Path::new("test/makcu-cpp.dll");
+    let focus_dll_path = Path::new("test/focus/focus.dll");
 
     if !demo_path.exists() {
         eprintln!("demo.exe not found in test directory");
@@ -56,6 +57,42 @@ fn main() -> Result<()> {
         Err(e) => {
             eprintln!("Failed to load makcu-cpp.dll: {}", e);
         }
+    }
+
+    // Demo application DLL loading if focus.dll exists
+    if focus_dll_path.exists() {
+        use std::env;
+
+        println!("\nTesting application DLL loading with focus.dll...");
+
+        // Change to focus directory temporarily for dependency resolution
+        let current_dir = env::current_dir().expect("Failed to get current directory");
+        let focus_dir = focus_dll_path.parent().unwrap();
+        env::set_current_dir(focus_dir).expect("Failed to change to focus directory");
+
+        let focus_dll_data = fs::read(focus_dll_path)?;
+        match Maple::load_application_dll_from_memory(&focus_dll_data) {
+            Ok(module) => {
+                println!("Successfully loaded focus.dll as application DLL");
+                println!("Base address: {:p}", module.base_address());
+                println!("Size: {} bytes", module.size());
+
+                println!("Executing application DLL (will run for 3 seconds)...");
+                match module.execute_dll_application() {
+                    Ok(_) => {
+                        println!("Application DLL started successfully!");
+                        std::thread::sleep(std::time::Duration::from_secs(3));
+                    }
+                    Err(e) => eprintln!("Failed to execute application DLL: {}", e),
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to load focus.dll as application DLL: {}", e);
+            }
+        }
+
+        // Restore working directory
+        env::set_current_dir(&current_dir).expect("Failed to restore working directory");
     }
 
     // Clean up the copied DLL

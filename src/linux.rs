@@ -47,6 +47,12 @@ impl MemoryModule for LinuxMemoryModule {
         ))
     }
 
+    fn execute_dll_application(&self) -> Result<()> {
+        Err(MapleError::PlatformNotSupported(
+            "Linux implementation not yet available".to_string(),
+        ))
+    }
+
     fn free(&mut self) -> Result<()> {
         Err(MapleError::PlatformNotSupported(
             "Linux implementation not yet available".to_string(),
